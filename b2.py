@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 ######################################################################
 #
 # File: b2
@@ -13,138 +13,36 @@
 This is a B2 command-line tool.  See the USAGE message for details.
 """
 
+from codecs import open
+from os import path
+import base64
 import datetime
+import docopt
 import getpass
 import hashlib
 import json
-import os.path
 import sys
-import urllib
-import urllib2
-import base64
+import urllib.request, urllib.parse, urllib.error
+import urllib.request, urllib.error, urllib.parse
 
-# To avoid confusion between official Backblaze releases of this tool and
-# the versions on Github, we use the convention that the third number is
-# odd for Github, and even for Backblaze releases.
-VERSION = '0.3.7'
+here = path.abspath(path.dirname(__file__))
 
-USAGE = """This program provides command-line access to the B2 service.
+with open(path.join(here, 'VERSION'), encoding='utf-8') as f:
+    VERSION = f.read().strip()
 
-Usages:
-
-    b2 authorize_account [--dev | --staging | --production] [accountId] [applicationKey]
-
-        Prompts for Backblaze accountID and applicationKey (unless they are given
-        on the command line).
-
-        The account ID is a 12-digit hex number that you can get from
-        your account page on backblaze.com.
-
-        The application key is a 40-digit hex number that you can get from
-        your account page on backblaze.com.
-
-        Stores an account auth token in ~/.b2_account_info
-
-    b2 clear_account
-
-        Erases everything in ~/.b2_account_info
-
-    b2 create_bucket <bucketName> <bucketType>
-
-        Creates a new bucket.  Prints the ID of the bucket created.
-
-    b2 delete_bucket <bucketName>
-
-        Deletes the bucket with the given name.
-
-    b2 delete_file_version <fileName> <fileId>
-
-        Permanently and irrevocably deletes one version of a file.
-
-    b2 download_file_by_id <fileId> <localFileName>
-
-        Downloads the given file, and stores it in the given local file.
-
-    b2 download_file_by_name <bucketName> <fileName> <localFileName>
-
-        Downloads the given file, and stores it in the given local file.
-
-    b2 get_file_info <fileId>
-
-        Prints all of the information about the file, but not its contents.
-
-    b2 hide_file <bucketName> <fileName>
-
-        Uploads a new, hidden, version of the given file.
-
-    b2 list_buckets
-
-        Lists all of the buckets in the current account.
-
-    b2 list_file_names <bucketName> [<startingName>] [<numberToShow>]
-
-        Lists the names of the files in a bucket, starting at the
-        given point.
-
-    b2 list_file_versions <bucketName> [<startingName>] [<startingFileId>] [<numberToShow>]
-
-        Lists the names of the files in a bucket, starting at the
-        given point.
-
-    b2 ls [--long] [--versions] <bucketName> [<folderName>]
-
-        Using the file naming convention that "/" separates folder
-        names from their contents, returns a list of the files
-        and folders in a given folder.  If no folder name is given,
-        lists all files at the top level.
-
-        The --long option produces very wide multi-column output
-        showing the upload date/time, file size, file id, whether it
-        is an uploaded file or the hiding of a file, and the file
-        name.  Folders don't really exist in B2, so folders are
-        shown with "-" in each of the fields other than the name.
-
-        The --version option shows all of versions of each file, not
-        just the most recent.
-
-    b2 make_url <fileId>
-
-        Prints an URL that can be used to download the given file, if
-        it is public.
-
-    b2 update_bucket <bucketName> <bucketType>
-
-        Updates the bucketType of an existing bucket.  Prints the ID
-        of the bucket updated.
-
-    b2 upload_file [--contentType <contentType>] [--info <key>=<value>]* <bucketName> <localFilePath> <b2FileName>
-
-        Uploads one file to the given bucket.  Uploads the contents
-        of the local file, and assigns the given name to the B2 file.
-
-        Content type is optional.  If not set, it will be set based on the
-        file extension.
-
-        Each fileInfo is of the form "a=b".
-
-    b2 version
-
-        Echos the version number of this program.
-"""
-
+with open(path.join(here, 'usage.txt'), encoding='utf-8') as f:
+    USAGE = f.read()
 
 def message_and_exit(message):
     """Prints a message, and exits with error status.
     """
-    print >>sys.stderr, message
+    print(message, file=sys.stderr)
     sys.exit(1)
-
 
 def usage_and_exit():
     """Prints a usage message, and exits with an error status.
     """
     message_and_exit(USAGE)
-
 
 def decode_sys_argv():
     """
@@ -155,7 +53,6 @@ def decode_sys_argv():
     """
     encoding = sys.getfilesystemencoding()
     return [arg.decode(encoding) for arg in sys.argv]
-
 
 class StoredAccountInfo(object):
 
@@ -264,18 +161,18 @@ class StoredAccountInfo(object):
         flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
         if os.name == 'nt':
             flags |= os.O_BINARY
-        with os.fdopen(os.open(self.filename, flags, 0600), 'wb') as f:
+        with os.fdopen(os.open(self.filename, flags, 0o600), 'wb') as f:
             json.dump(self.data, f, indent=4, sort_keys=True)
 
 
 def report_http_error_and_exit(e, url, data, headers):
-    print 'Error returned from server:'
-    print
-    print 'URL:', url
-    print 'Params:', data
-    print 'Headers:', headers
-    print
-    print e.read()
+    print('Error returned from server:')
+    print()
+    print('URL:', url)
+    print('Params:', data)
+    print('Headers:', headers)
+    print()
+    print(e.read())
     sys.exit(1)
 
 
@@ -294,10 +191,10 @@ class OpenUrl(object):
 
     def __enter__(self):
         try:
-            request = urllib2.Request(self.url, self.data, self.headers)
-            self.file = urllib2.urlopen(request)
+            request = urllib.request.Request(self.url, self.data, self.headers)
+            self.file = urllib.request.urlopen(request)
             return self.file
-        except urllib2.HTTPError as e:
+        except urllib.error.HTTPError as e:
             if self.exit_on_error:
                 report_http_error_and_exit(e, self.url, self.data, self.headers)
             else:
@@ -351,7 +248,7 @@ def url_for_api(info, api_name):
 def b2_url_encode(s):
     """URL-encodes a unicode string to be sent to B2 in an HTTP header.
     """
-    return urllib.quote(s.encode('utf-8'))
+    return urllib.parse.quote(s.encode('utf-8'))
 
 
 def b2_url_decode(s):
@@ -362,7 +259,7 @@ def b2_url_decode(s):
     # Use str() to make sure that the input to unquote is a str, not
     # unicode, which ensures that the result is a str, which allows
     # the decoding to work properly.
-    return urllib.unquote_plus(str(s)).decode('utf-8')
+    return urllib.parse.unquote_plus(str(s)).decode('utf-8')
 
 
 def authorize_account(args):
@@ -378,17 +275,17 @@ def authorize_account(args):
             url = auth_urls[option]
             break
         else:
-            print 'ERROR: unknown option', option
+            print('ERROR: unknown option', option)
             usage_and_exit()
 
-    print 'Using %s' % url
+    print('Using %s' % url)
 
     if 2 < len(args):
         usage_and_exit()
     if 0 < len(args):
         accountId = args[0]
     else:
-        accountId = raw_input('Backblaze account ID: ')
+        accountId = input('Backblaze account ID: ')
 
     if 1 < len(args):
         applicationKey = args[1]
@@ -444,7 +341,7 @@ def get_bucket_id_from_bucket_name(info, bucket_name):
 
     result = info.get_bucket_id_or_none_from_bucket_name(bucket_name)
     if result is None:
-        print 'No such bucket:', bucket_name
+        print('No such bucket:', bucket_name)
         sys.exit(1)
     return result
 
@@ -460,7 +357,7 @@ def list_buckets(args):
         bucket_name = bucket['bucketName']
         bucket_id = bucket['bucketId']
         bucket_type = bucket['bucketType']
-        print '%s  %-10s  %s' % (bucket_id, bucket_type, bucket_name)
+        print('%s  %-10s  %s' % (bucket_id, bucket_type, bucket_name))
 
 
 def create_bucket(args):
@@ -480,7 +377,7 @@ def create_bucket(args):
         'bucketType' : bucket_type
         }
     response = post_json(url, params, auth_token)
-    print response['bucketId']
+    print(response['bucketId'])
 
     info.save_bucket_name(bucket_name, response['bucketId'])
 
@@ -502,7 +399,7 @@ def delete_bucket(args):
         }
     response = post_json(url, params, auth_token)
 
-    print json.dumps(response, indent=4, sort_keys=True)
+    print(json.dumps(response, indent=4, sort_keys=True))
 
 
 def update_bucket(args):
@@ -526,7 +423,7 @@ def update_bucket(args):
     }
     response = post_json(url, params, auth_token)
 
-    print json.dumps(response, indent=4, sort_keys=True)
+    print(json.dumps(response, indent=4, sort_keys=True))
 
 def list_file_names(args):
 
@@ -555,7 +452,7 @@ def list_file_names(args):
     }
     response = post_json(url, params, auth_token)
 
-    print json.dumps(response, indent=2, sort_keys=True)
+    print(json.dumps(response, indent=2, sort_keys=True))
 
 def list_file_versions(args):
 
@@ -589,7 +486,7 @@ def list_file_versions(args):
     }
     response = post_json(url, params, auth_token)
 
-    print json.dumps(response, indent=2, sort_keys=True)
+    print(json.dumps(response, indent=2, sort_keys=True))
 
 
 def ensure_upload_data(bucket_id, info):
@@ -599,7 +496,7 @@ def ensure_upload_data(bucket_id, info):
     """
     upload_data = info.get_bucket_upload_data(bucket_id)
     if upload_data is None:
-        print 'Getting upload URL...'
+        print('Getting upload URL...')
         auth_token = info.get_account_auth_token()
         url = url_for_api(info, 'b2_get_upload_url')
         params = { 'bucketId' : bucket_id }
@@ -624,7 +521,7 @@ def get_file_info(args):
     params = { 'fileId' : file_id }
     response = post_json(url, params, auth_token)
 
-    print json.dumps(response, indent=2, sort_keys=True)
+    print(json.dumps(response, indent=2, sort_keys=True))
 
 def delete_file_version(args):
     if len(args) != 2:
@@ -639,7 +536,7 @@ def delete_file_version(args):
     params = { 'fileName' : file_name, 'fileId' : file_id }
     response = post_json(url, params, auth_token)
 
-    print json.dumps(response, indent=2, sort_keys=True)
+    print(json.dumps(response, indent=2, sort_keys=True))
 
 def hide_file(args):
     if len(args) != 2:
@@ -658,7 +555,7 @@ def hide_file(args):
     }
     response = post_json(url, params, auth_token)
 
-    print json.dumps(response, indent=2, sort_keys=True)
+    print(json.dumps(response, indent=2, sort_keys=True))
 
 
 def hex_sha1_of_file(path):
@@ -676,7 +573,7 @@ def hex_sha1_of_file(path):
 def parse_file_info(item, file_infos):
     parts = item.split('=')
     if len(parts) != 2:
-        print >>sys.stdout, 'ERROR: bad file info:', item
+        print('ERROR: bad file info:', item, file=sys.stdout)
         sys.exit(1)
     file_infos[parts[0]] = parts[1]
 
@@ -711,7 +608,7 @@ def upload_file(args):
 
     # Try 5 times to upload the file.  If one fails, get a different
     # upload URL for the next try.
-    for i in xrange(5):
+    for i in range(5):
         bucket_upload_data = ensure_upload_data(bucket_id, info)
         url = bucket_upload_data[StoredAccountInfo.BUCKET_UPLOAD_URL]
 
@@ -721,23 +618,23 @@ def upload_file(args):
             'Content-Type': content_type,
             'X-Bz-Content-Sha1': hex_sha1_of_file(local_file)
             }
-        for (k, v) in file_infos.iteritems():
+        for (k, v) in file_infos.items():
             headers['X-Bz-Info-' + k] = b2_url_encode(v)
 
         try:
             response = post_file(url, headers, local_file, exit_on_error=False)
-            print json.dumps(response, indent=4, sort_keys=True)
+            print(json.dumps(response, indent=4, sort_keys=True))
             if 'fileId' in response:
-                print "URL by file name: " + info.get_download_url() + "/file/" + bucket_name + "/" + b2_file
-                print "URL by fileId: " + info.get_download_url() + "/b2api/v1/b2_download_file_by_id?fileId=" + response['fileId']
+                print("URL by file name: " + info.get_download_url() + "/file/" + bucket_name + "/" + b2_file)
+                print("URL by fileId: " + info.get_download_url() + "/b2api/v1/b2_download_file_by_id?fileId=" + response['fileId'])
             return
-        except urllib2.HTTPError as e:
+        except urllib.error.HTTPError as e:
             if 500 <= e.code and e.code < 600:
                 info.clear_bucket_upload_data(bucket_id)
             else:
                 report_http_error_and_exit(e, url, None, headers)
 
-    print 'FAILED to upload after 5 tries'
+    print('FAILED to upload after 5 tries')
     sys.exit(1)
 
 
@@ -746,13 +643,13 @@ def download_file_from_url(url, request_body, encoded_headers, local_file_name):
         info = response.info()
         file_size = int(info['content-length'])
         file_sha1 = info['x-bz-content-sha1']
-        print 'File name:   ', info['x-bz-file-name']
-        print 'File size:   ', file_size
-        print 'Content type:', info['content-type']
-        print 'Content sha1:', file_sha1
+        print('File name:   ', info['x-bz-file-name'])
+        print('File size:   ', file_size)
+        print('Content type:', info['content-type'])
+        print('Content sha1:', file_sha1)
         for name in info:
             if name.startswith('x-bz-info-'):
-                print 'INFO', name[10:] + ':', info[name]
+                print('INFO', name[10:] + ':', info[name])
         block_size = 4096
         digest = hashlib.sha1()
         bytes_read = 0
@@ -765,10 +662,10 @@ def download_file_from_url(url, request_body, encoded_headers, local_file_name):
                 digest.update(data)
                 bytes_read += len(data)
         if bytes_read != int(info['content-length']):
-            print 'ERROR: only %d of %d bytes read' % (bytes_read, file_size)
+            print('ERROR: only %d of %d bytes read' % (bytes_read, file_size))
         if digest.hexdigest() != file_sha1:
-            print 'ERROR: sha1 checksum mismatch -- bad data'
-        print 'checksum matches'
+            print('ERROR: sha1 checksum mismatch -- bad data')
+        print('checksum matches')
 
 
 def download_file_by_id(args):
@@ -818,17 +715,17 @@ def make_url(args):
 
     url = url_for_api(info, 'b2_download_file_by_id')
 
-    print '%s?fileId=%s' % (url, file_id)
+    print('%s?fileId=%s' % (url, file_id))
 
 def print_ls_entry(is_long, is_folder, name, file):
     # if not long, it's easy
     if not is_long:
-        print name
+        print(name)
     else:
         # order is file_id, action, date, time, size, name
         format = '%83s  %6s  %10s  %8s  %9d  %s'
         if is_folder:
-            print format % ('-', '-', '-', '-', 0, name)
+            print(format % ('-', '-', '-', '-', 0, name))
         else:
             file_id = file['fileId']
             action = file['action']
@@ -836,7 +733,7 @@ def print_ls_entry(is_long, is_folder, name, file):
             date_str = dt.strftime('%Y-%m-%d')
             time_str = dt.strftime('%H:%M:%S')
             size = file['size']
-            print format % (file_id, action, date_str, time_str, size, name)
+            print(format % (file_id, action, date_str, time_str, size, name))
 
 def ls(args):
     # Parse arguments
@@ -850,7 +747,7 @@ def ls(args):
         elif option == '--versions':
             show_versions = True
         else:
-            print 'Unknown option:', option
+            print('Unknown option:', option)
             usage_and_exit()
     if len(args) < 1 or 2 < len(args):
         usage_and_exit()
@@ -976,7 +873,7 @@ def main():
     elif action == 'upload_file':
         upload_file(args)
     elif action == 'version':
-        print 'b2 command line tool, version', VERSION
+        print('b2 command line tool, version', VERSION)
     else:
         usage_and_exit()
 
