@@ -49,41 +49,11 @@ setup(
     # What does your project relate to?
     keywords='cloud storage backup',
 
-    # You can just specify the packages manually here if your project is
-    # simple. Or you can use find_packages().
-#    packages=find_packages(exclude=['contrib', 'docs', 'tests']),
-    packages=find_packages(),
-
-    # Alternatively, if you want to distribute just a my_module.py, uncomment
-    # this:
-#       py_modules=["b2"],
-
-    # List run-time dependencies here.  These will be installed by pip when
-    # your project is installed. For an analysis of "install_requires" vs pip's
-    # requirements files see:
-    # https://packaging.python.org/en/latest/requirements.html
+    py_modules=["b2"],
     install_requires=['docopt>=0.6.1'],
 
-    # List additional groups of dependencies here (e.g. development
-    # dependencies). You can install these using the following syntax,
-    # for example:
-    # $ pip install -e .[dev,test]
-    #extras_require={
-    #    'dev': ['check-manifest'],
-    #    'test': ['coverage'],
-    #},
+    data_files = [("", ["VERSION", "usage.txt"])],
 
-
-    # If there are data files included in your packages that need to be
-    # installed, specify them here.  If using Python 2.6 or less, then these
-    # have to be included in MANIFEST.in as well.
-    package_data={
-        'b2': ['VERSION', "nalle.txt"],
-    },
-
-    # To provide executable scripts, use entry points in preference to the
-    # "scripts" keyword. Entry points provide cross-platform support and allow
-    # pip to create the appropriate form of executable for the target platform.
     entry_points={
         'console_scripts': [
             'b2=b2:main',
